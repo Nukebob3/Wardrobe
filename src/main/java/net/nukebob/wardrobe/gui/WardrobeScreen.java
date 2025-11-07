@@ -5,6 +5,7 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.Element;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.text.Text;
+import net.minecraft.util.Identifier;
 import net.nukebob.wardrobe.Wardrobe;
 import net.nukebob.wardrobe.config.Config;
 
@@ -15,6 +16,7 @@ import java.util.Arrays;
 public class WardrobeScreen extends Screen {
     double scroll = 0;
     public static File skinsDirectory;
+    public static Identifier selectedSkin = null;
 
     public WardrobeScreen() {
         super(Text.translatable("screen."+Wardrobe.MOD_ID+".wardrobe"));

@@ -55,7 +55,7 @@ public class SkinWidget extends PressableWidget {
             NativeImage image = NativeImage.read(new FileInputStream(WardrobeScreen.skinsDirectory.toURI().resolve(skinPath).getPath()));
             NativeImageBackedTexture texture = new NativeImageBackedTexture(() -> "poop", image);
 
-            Identifier skinId = Identifier.of("wardrobe", String.valueOf(id));
+            Identifier skinId = Identifier.of(Wardrobe.MOD_ID, String.valueOf(id));
             MinecraftClient.getInstance().getTextureManager().registerTexture(skinId, texture);
 
             return RenderLayer.getEntityTranslucent(skinId);
@@ -77,6 +77,7 @@ public class SkinWidget extends PressableWidget {
         } else {
             Wardrobe.LOGGER.error("File no longer exists - {}", skinPath);
         }
+        WardrobeScreen.selectedSkin = Identifier.of(Wardrobe.MOD_ID, String.valueOf(id));
     }
 
     @Override

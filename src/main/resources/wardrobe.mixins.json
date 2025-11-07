@@ -5,6 +5,7 @@
   "client": [
     "GameMenuScreenMixin",
     "MinecraftClientMixin",
+    "PlayerListEntryMixin",
     "TitleScreenMixin"
   ],
   "injectors": {
