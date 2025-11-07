@@ -1,0 +1,16 @@
+{
+  "required": true,
+  "package": "net.nukebob.wardrobe.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "client": [
+    "GameMenuScreenMixin",
+    "MinecraftClientMixin",
+    "TitleScreenMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
+  }
+}
