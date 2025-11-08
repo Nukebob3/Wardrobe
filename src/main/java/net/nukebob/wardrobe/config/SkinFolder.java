@@ -14,7 +14,7 @@ public class SkinFolder {
     public List<String> skins = new ArrayList<>();
     public List<SkinFolder> folders = new ArrayList<>();
 
-    public SkinFolder() {}
+    public SkinFolder() {this(null);}
 
     public SkinFolder(String name) {
         this.name = name;
