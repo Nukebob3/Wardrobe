@@ -4,6 +4,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.gui.DrawContext;
+import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.screen.narration.NarrationMessageBuilder;
 import net.minecraft.client.gui.widget.PressableWidget;
 import net.minecraft.client.model.Dilation;
@@ -25,6 +26,7 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.RotationAxis;
 import net.nukebob.wardrobe.Wardrobe;
 import net.nukebob.wardrobe.api.MojangSkin;
+import net.nukebob.wardrobe.config.Config;
 import net.nukebob.wardrobe.util.GuiColours;
 import org.joml.Vector3f;
 
@@ -33,6 +35,7 @@ import java.io.FileInputStream;
 import java.net.URI;
 
 public class SkinWidget extends PressableWidget {
+    private final File skinsDirectory;
     private final URI skinPath;
     private final String name;
     private final boolean slim;
@@ -40,9 +43,10 @@ public class SkinWidget extends PressableWidget {
 
     private RenderLayer skinLayer = null;
 
-    public SkinWidget(URI skinPath, int id, int x, int y, int width, int height, boolean slim) {
+    public SkinWidget(URI skinPath, File skinsDirectory, int id, int x, int y, int width, int height, boolean slim) {
         super(x, y, width, height, Text.empty());
         this.skinPath = skinPath;
+        this.skinsDirectory = skinsDirectory;
         this.slim = slim;
         this.id = id;
 
@@ -52,10 +56,16 @@ public class SkinWidget extends PressableWidget {
 
     public RenderLayer getSkinLayer(URI skinPath) {
         try {
-            NativeImage image = NativeImage.read(new FileInputStream(WardrobeScreen.skinsDirectory.toURI().resolve(skinPath).getPath()));
+            File file = new File(skinsDirectory.toURI().resolve(skinPath));
+            if (file.isDirectory()) return null;
+
+            NativeImage image = NativeImage.read(new FileInputStream(file));
             NativeImageBackedTexture texture = new NativeImageBackedTexture(() -> "poop", image);
 
-            Identifier skinId = Identifier.of(Wardrobe.MOD_ID, String.valueOf(id));
+            File rootDir = Config.loadConfig().getSkinsDirectory();
+            String relativePath = rootDir.toURI().relativize(file.toURI()).getPath();
+
+            Identifier skinId = Identifier.of(Wardrobe.MOD_ID, relativePath);
             MinecraftClient.getInstance().getTextureManager().registerTexture(skinId, texture);
 
             return RenderLayer.getEntityTranslucent(skinId);
@@ -65,19 +75,28 @@ public class SkinWidget extends PressableWidget {
         }
     }
 
+
     public String getName(URI skinPath) {
-        return new File(WardrobeScreen.skinsDirectory.toURI().resolve(skinPath)).getName();
+        return new File(skinsDirectory.toURI().resolve(skinPath)).getName();
     }
 
     @Override
     public void onPress() {
-        File file = new File(WardrobeScreen.skinsDirectory.toURI().resolve(skinPath));
-        if (file.exists()) {
+        URI absolute = skinsDirectory.toURI().resolve(skinPath);
+        File file = new File(absolute);
+
+        if (file.isDirectory()) {
+            Screen newScreen = new WardrobeScreen(file);
+            MinecraftClient.getInstance().setScreen(newScreen);
+        } else if (file.exists()) {
+            File rootDir = Config.loadConfig().getSkinsDirectory();
+            String relativePath = rootDir.toURI().relativize(file.toURI()).getPath();
+
             MojangSkin.uploadSkin(file, "slim", MinecraftClient.getInstance().getSession().getAccessToken());
+            WardrobeScreen.selectedSkin = Identifier.of(Wardrobe.MOD_ID, relativePath);
         } else {
             Wardrobe.LOGGER.error("File no longer exists - {}", skinPath);
         }
-        WardrobeScreen.selectedSkin = Identifier.of(Wardrobe.MOD_ID, String.valueOf(id));
     }
 
     @Override
@@ -101,6 +120,7 @@ public class SkinWidget extends PressableWidget {
         PlayerEntityRenderState state = getRenderState();
         renderPlayerEntityState(context, getX(), getY(), state);
 
+
         TextRenderer textRenderer = MinecraftClient.getInstance().textRenderer;
         int textWidth = textRenderer.getWidth(name);
         float scale = height/120f;
@@ -111,6 +131,9 @@ public class SkinWidget extends PressableWidget {
         context.getMatrices().translate(textX, textY, 0);
         context.getMatrices().scale(scale, scale, scale);
         context.drawText(textRenderer, name, 0,0, Colors.WHITE, true);
+
+        if (new File(skinsDirectory.toURI().resolve(skinPath)).isDirectory()) context.drawGuiTexture(RenderLayer::getGuiTextured, Identifier.of(Wardrobe.MOD_ID, "icon/folder"), -16,-80, 64, 64);
+
         context.getMatrices().pop();
     }
 
@@ -135,6 +158,8 @@ public class SkinWidget extends PressableWidget {
     }
 
     private void renderPlayerEntityState(DrawContext context, int x, int y, PlayerEntityRenderState state) {
+        if (skinLayer==null) return;
+
         MinecraftClient client = MinecraftClient.getInstance();
         MatrixStack matrices = context.getMatrices();
 

@@ -17,6 +17,10 @@ public class Config {
 
     public String skinsDirectory = "/wardrobe/skins/";
 
+    public File getSkinsDirectory() {
+        return new File(skinsDirectory).isAbsolute()?new File(skinsDirectory): new File(MinecraftClient.getInstance().runDirectory, skinsDirectory);
+    }
+
     public static Config loadConfig() {
         if (!CONFIG_FILE.exists()) {
             config = new Config();
