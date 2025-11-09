@@ -26,75 +26,76 @@ import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.RotationAxis;
 import net.nukebob.wardrobe.Wardrobe;
 import net.nukebob.wardrobe.api.MojangSkin;
-import net.nukebob.wardrobe.config.Config;
+import net.nukebob.wardrobe.config.SkinData;
 import net.nukebob.wardrobe.config.SkinFolder;
 import net.nukebob.wardrobe.util.GuiColours;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3f;
 
+import java.awt.*;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.URI;
+import java.util.Objects;
 
 public class SkinWidget extends PressableWidget {
     private final File skinsDirectory;
-    private final SkinFolder folder;
     private final URI skinPath;
-    private final String name;
-    private final boolean slim;
+
+    private final SkinFolder folder;
+    private final SkinData data;
+
     private int selected = 0;
     private final int id;
 
     private RenderLayer skinLayer = null;
 
-    public SkinWidget(URI skinPath, File skinsDirectory, int id, int x, int y, int width, int height, boolean slim) {
-        this(skinPath, skinsDirectory, id, x, y, width, height, slim, null);
+    public SkinWidget(URI skinPath, File skinsDirectory, int id, int x, int y, int width, int height) {
+        this(skinPath, skinsDirectory, id, x, y, width, height, null, null);
     }
-    public SkinWidget(URI skinPath, File skinsDirectory, int id, int x, int y, int width, int height, boolean slim, @Nullable SkinFolder folder) {
+    public SkinWidget(URI skinPath, File skinsDirectory, int id, int x, int y, int width, int height, @Nullable SkinFolder folder, @Nullable SkinData data) {
         super(x, y, width, height, Text.empty());
         this.skinPath = skinPath;
         this.skinsDirectory = skinsDirectory;
-        this.slim = slim;
         this.id = id;
 
         this.folder = folder;
-        skinLayer = getSkinLayer(skinPath);
-        name = getName(skinPath);
+        this.data = Objects.requireNonNullElseGet(data, () -> {
+            SkinData d = new SkinData();
+            d.name=getName();
+            d.slim=true;
+            return d;
+        });
+        skinLayer = getSkinLayer(0);
     }
 
-    public RenderLayer getSkinLayer(URI skinPath) {
+    /** Returns the file on disk */
+    private File getFile() {
+        return new File(skinsDirectory.toURI().resolve(skinPath));
+    }
+
+    public RenderLayer getSkinLayer(int variant) {
         try {
-            File file = new File(skinsDirectory.toURI().resolve(skinPath));
-            if (file.isDirectory()) {
-                if (file.listFiles()==null) return null;
-                if (folder!=null&&"variants".equals(folder.type)) {
-                    Identifier skinId = null;
-                    for (int i = 0; i < Math.min(folder.skins.size(), 5); i++) {
-                        File skin = new File(file, folder.skins.get(i));
-                        skinId = registerTexture(skin);
-                    }
-                    return skinId!=null?getSkinLayer(0):null;
+            File base = getFile();
+            File skinFile;
+
+            if (base.isDirectory() && folder != null) {
+                if ("variants".equals(folder.type)) {
+                    if (folder.skins.isEmpty() || variant >= folder.skins.size()) return null;
+                    skinFile = new File(base, folder.skins.get(variant));
+                } else {
+                    return null;
                 }
-                return null;
+            } else {
+                skinFile = base;
             }
 
-            return RenderLayer.getEntityTranslucent(registerTexture(file));
+            if (!skinFile.exists()) return null;
 
-        } catch (Exception exception) {
-            Wardrobe.LOGGER.error("Failed to load skin {} {}", skinPath, exception.getLocalizedMessage());
-            return null;
-        }
-    }
-    public RenderLayer getSkinLayer(int i) {
-        try {
-            File file = new File(skinsDirectory.toURI().resolve(skinPath));
-            File skin = new File(file, folder.skins.get(i));
-            File rootDir = Config.loadConfig().getSkinsDirectory();
-            String relativePath = rootDir.toURI().relativize(skin.toURI()).getPath();
-            Identifier skinId = Identifier.of(Wardrobe.MOD_ID, relativePath);
+            Identifier id = registerTexture(skinFile);
+            return RenderLayer.getEntityTranslucent(id);
 
-            return RenderLayer.getEntityTranslucent(skinId);
         } catch (Exception exception) {
             Wardrobe.LOGGER.error("Failed to load skin {} {}", skinPath, exception.getLocalizedMessage());
             return null;
@@ -103,9 +104,9 @@ public class SkinWidget extends PressableWidget {
 
     private Identifier registerTexture(File file) throws IOException {
         NativeImage image = NativeImage.read(new FileInputStream(file));
-        NativeImageBackedTexture texture = new NativeImageBackedTexture(() -> "poop", image);
+        NativeImageBackedTexture texture = new NativeImageBackedTexture(() -> "wardrobe_skin", image);
 
-        File rootDir = Config.loadConfig().getSkinsDirectory();
+        File rootDir = WardrobeScreen.config.getSkinsDirectory();
         String relativePath = rootDir.toURI().relativize(file.toURI()).getPath();
 
         Identifier skinId = Identifier.of(Wardrobe.MOD_ID, relativePath);
@@ -115,49 +116,57 @@ public class SkinWidget extends PressableWidget {
     }
 
 
-    public String getName(URI skinPath) {
+    public String getName() {
         return new File(skinsDirectory.toURI().resolve(skinPath)).getName();
     }
 
     @Override
-    public void onPress() {
-        URI absolute = skinsDirectory.toURI().resolve(skinPath);
-        File file = new File(absolute);
+    public void onPress() {}
 
-        if (folder!=null&&("folder".equals(folder.type)||"variants".equals(folder.type))) {
-            if ("folder".equals(folder.type)) {
+    @Override
+    public void onClick(double mouseX, double mouseY) {
+        File file = getFile();
+        if (folder!=null) {
+            if ("folder".equals(folder.type)||"section".equals(folder.type)) {
                 Screen newScreen = new WardrobeScreen(file);
                 MinecraftClient.getInstance().setScreen(newScreen);
-            } else {
+            } else if ("variants".equals(folder.type)) {
+                int maxVariants = Math.min(folder.skins.size(), 5);
+                int totalHeight = (int)(height * 0.7f);
+                int gap = 4;
+                int boxSize = (totalHeight - gap * (5 - 1)) / 5;
+                int startY = getY() + 6;
+                int boxX = getX() + width - boxSize - 6;
+                int boxY = startY + maxVariants * (boxSize + gap);
+                if (mouseX >= boxX && mouseX <= boxX + boxSize && mouseY >= boxY && mouseY <= boxY + boxSize) {
+                    Screen newScreen = new WardrobeScreen(file);
+                    MinecraftClient.getInstance().setScreen(newScreen);
+                    return;
+                }
                 File skin = new File(file, folder.skins.get(selected));
-
-                File rootDir = Config.loadConfig().getSkinsDirectory();
-                String relativePath = rootDir.toURI().relativize(skin.toURI()).getPath();
-
-                MojangSkin.uploadSkin(skin, "slim", MinecraftClient.getInstance().getSession().getAccessToken());
-                WardrobeScreen.selectedSkin = Identifier.of(Wardrobe.MOD_ID, relativePath);
+                uploadSkin(skin);
             }
         } else if (file.exists()) {
-            File rootDir = Config.loadConfig().getSkinsDirectory();
-            String relativePath = rootDir.toURI().relativize(file.toURI()).getPath();
-
-            MojangSkin.uploadSkin(file, "slim", MinecraftClient.getInstance().getSession().getAccessToken());
-            WardrobeScreen.selectedSkin = Identifier.of(Wardrobe.MOD_ID, relativePath);
+            uploadSkin(file);
         } else {
-            Wardrobe.LOGGER.error("File no longer exists - {}", skinPath);
+            Wardrobe.LOGGER.error("File no longer exists: {}", skinPath);
         }
     }
 
-    @Override
-    protected void appendClickableNarrations(NarrationMessageBuilder builder) {
+    private void uploadSkin(File skin) {
+        File root = WardrobeScreen.config.getSkinsDirectory();
+        String relative = root.toURI().relativize(skin.toURI()).getPath();
 
+        MojangSkin.uploadSkin(skin, data.slim ? "slim" : "classic", MinecraftClient.getInstance().getSession().getAccessToken());
+        WardrobeScreen.selectedSkin = Identifier.of(Wardrobe.MOD_ID, relative);
+        WardrobeScreen.selectedSkinSlim = data.slim;
     }
 
     @Override
     protected void renderWidget(DrawContext context, int mouseX, int mouseY, float deltaTicks) {
         context.fill(getX(), getY(), getX()+width, getY()+height, GuiColours.FRAME_BACKGROUND);
-        int color = GuiColours.FRAME_OUTLINE;
-        context.drawBorder(getX()+4, getY()+4,width-8,height-8, color);
+        int frameOutlineColor = GuiColours.FRAME_OUTLINE;
+        context.drawBorder(getX()+4, getY()+4,width-8,height-8, frameOutlineColor);
 
         /*if (id==5) {
             context.fill(getX(),getY()-2, getX()+width, getY(), 0xFFffe90f);
@@ -170,7 +179,7 @@ public class SkinWidget extends PressableWidget {
         renderPlayerEntityState(context, getX(), getY(), state);
 
         if (folder!=null) {
-            if ("folder".equals(folder.type)) {
+            if ("folder".equals(folder.type)||"section".equals(folder.type)) {
                 Identifier folderIcon = Identifier.of(Wardrobe.MOD_ID, "icon/folder");
 
                 int iconSize = (int) (height * 0.5f);
@@ -179,40 +188,59 @@ public class SkinWidget extends PressableWidget {
 
                 context.drawGuiTexture(RenderLayer::getGuiTextured, folderIcon, iconX, iconY, iconSize, iconSize);
             } else if ("variants".equals(folder.type)) {
-                if (true) { //TODO decide whether it's on hover or not
-                    int maxVariants = Math.min(folder.skins.size(), 5);
-                    int totalHeight = (int)(height * 0.7f);
-                    int gap = 4;
-                    int boxSize = (totalHeight - gap * (5 - 1)) / 5;
-                    int startY = getY() + 6;
+                int maxVariants = Math.min(folder.skins.size(), 5);
+                int totalHeight = (int)(height * 0.7f);
+                int gap = 4;
+                int boxSize = (totalHeight - gap * (5 - 1)) / 5;
+                int startY = getY() + 6;
 
-                    for (int i = 0; i < maxVariants; i++) {
-                        int boxX = getX() + width - boxSize - 6;
-                        int boxY = startY + i * (boxSize + gap);
-                        context.drawBorder(boxX, boxY, boxSize, boxSize, Colors.WHITE);
-
-                        if (mouseX >= boxX && mouseX <= boxX + boxSize &&
-                                mouseY >= boxY && mouseY <= boxY + boxSize) {
-                            selected = i;
-                            skinLayer = getSkinLayer(selected);
-                        }
+                for (int i = 0; i < maxVariants; i++) {
+                    int boxX = getX() + width - boxSize - 6;
+                    int boxY = startY + i * (boxSize + gap);
+                    context.drawBorder(boxX, boxY, boxSize, boxSize, isHovered()?Colors.WHITE:Colors.GRAY);
+                    if (isHovered()) {
+                        int variantColor = new Color(getVariantColour(i, maxVariants)).getRGB();
+                        context.fill(boxX + 1, boxY + 1, boxX + boxSize - 1, boxY + boxSize - 1, variantColor);
                     }
+
+                    if (mouseX >= boxX && mouseX <= boxX + boxSize &&
+                            mouseY >= boxY && mouseY <= boxY + boxSize) {
+                        selected = i;
+                        skinLayer = getSkinLayer(selected);
+                    }
+                }
+
+
+                if (isHovered()) {
+                    int boxX = getX() + width - boxSize - 6;
+                    int boxY = startY + maxVariants * (boxSize + gap);
+                    Identifier folderIcon = Identifier.of(Wardrobe.MOD_ID, "icon/folder_small");
+                    context.drawGuiTexture(RenderLayer::getGuiTextured, folderIcon, boxX, boxY, boxSize, boxSize);
                 }
             }
         }
 
         TextRenderer textRenderer = MinecraftClient.getInstance().textRenderer;
         float scale = height / 120f;
-        int textWidth = textRenderer.getWidth(name);
+        int textWidth = textRenderer.getWidth(data.name);
 
         float textX = getX() + width / 2f - (textWidth * scale) / 2f;
-        float textY = getY() + height - ((folder!=null&&"folder".equals(folder.type)) ? 50 : 0) - 10;
+        float textY = getY() + height - ((folder!=null&&("folder".equals(folder.type)||"section".equals(folder.type))) ? 50 : 0) - 10;
 
         context.getMatrices().push();
         context.getMatrices().translate(textX, textY, 0);
         context.getMatrices().scale(scale, scale, 1f);
-        context.drawText(textRenderer, name, 0, 0, Colors.WHITE, true);
+        context.drawText(textRenderer, data.name, 0, 0, Colors.WHITE, true);
         context.getMatrices().pop();
+    }
+
+    private int getVariantColour(int variant, int maxVariants) {
+        String variantKey = WardrobeScreen.config.getSkinsDirectory().toURI().relativize(new File(new File(skinsDirectory, skinPath.toString()), folder.skins.get(variant)).toURI()).getPath();
+        SkinData data = WardrobeScreen.skinPropertiesSettings.properties.get(variantKey);
+        Integer colour = null;
+        if (data!=null) colour = data.colour;
+        if (colour != null) return colour;
+        return Color.HSBtoRGB(0f, 0f, (0.7f-((variant / (float)(maxVariants - 1))*0.5f)));
     }
 
     private PlayerEntityRenderState getRenderState () {
@@ -250,7 +278,7 @@ public class SkinWidget extends PressableWidget {
         matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(10f));
         matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-30f));
 
-        PlayerEntityModel model = new PlayerEntityModel(getModelPart(slim), slim);
+        PlayerEntityModel model = new PlayerEntityModel(getModelPart(data.slim), data.slim);
 
         model.resetTransforms();
         model.setAngles(state);
@@ -275,5 +303,10 @@ public class SkinWidget extends PressableWidget {
     private ModelPart getModelPart(boolean slim) {
         ModelData data = PlayerEntityModel.getTexturedModelData(Dilation.NONE, slim);
         return TexturedModelData.of(data, 64, 64).createModel();
+    }
+
+    @Override
+    protected void appendClickableNarrations(NarrationMessageBuilder builder) {
+
     }
 }

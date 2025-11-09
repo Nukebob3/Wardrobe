@@ -20,7 +20,7 @@ public class PlayerListEntryMixin {
     private void wardrobe$skinTextures(CallbackInfoReturnable<SkinTextures> cir) {
         if (profile.getId().equals(MinecraftClient.getInstance().getSession().getUuidOrNull())) {
             if (WardrobeScreen.selectedSkin!=null)
-                cir.setReturnValue(new SkinTextures(WardrobeScreen.selectedSkin, null, null, null, SkinTextures.Model.SLIM, true));
+                cir.setReturnValue(new SkinTextures(WardrobeScreen.selectedSkin, null, null, null, WardrobeScreen.selectedSkinSlim?SkinTextures.Model.SLIM: SkinTextures.Model.WIDE, true));
         }
     }
 }

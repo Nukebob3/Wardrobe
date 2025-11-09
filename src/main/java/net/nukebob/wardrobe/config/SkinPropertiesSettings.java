@@ -8,34 +8,35 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
-public class SkinSettings {
+public class SkinPropertiesSettings {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final File SKIN_SETTINGS_FILE = new File(Config.loadConfig().getSkinsDirectory() + "/wardrobe.json");
-    private static SkinSettings skinSettings;
+    private static final File SKIN_SETTINGS_FILE = new File(Config.loadConfig().getSkinsDirectory() + "/wardrobe_properties.json");
+    private static SkinPropertiesSettings skinPropertiesSettings;
 
-    public SkinFolder root = new SkinFolder();
+    public Map<String, SkinData> properties = new HashMap<>();
 
-    public static SkinSettings loadSettings() {
+    public static SkinPropertiesSettings loadSettings() {
         if (!SKIN_SETTINGS_FILE.exists()) {
-            skinSettings = new SkinSettings();
+            skinPropertiesSettings = new SkinPropertiesSettings();
 
             File rootDir = Config.loadConfig().getSkinsDirectory();
-            skinSettings.root = SkinFolder.buildFromDirectory(rootDir);
+            //skinPropertiesSettings.properties = SkinFolder.buildFromDirectory(rootDir);
             saveSettings();
         } else {
             try (FileReader reader = new FileReader(SKIN_SETTINGS_FILE)) {
-                skinSettings = GSON.fromJson(reader, SkinSettings.class);
+                skinPropertiesSettings = GSON.fromJson(reader, SkinPropertiesSettings.class);
             } catch (IOException e) {
                 Wardrobe.LOGGER.error("Could not load config file", e);
             }
         }
-        if (skinSettings == null) {
-            skinSettings = new SkinSettings();
-            skinSettings.root.name = "root";
+        if (skinPropertiesSettings == null) {
+            skinPropertiesSettings = new SkinPropertiesSettings();
             saveSettings();
         }
-        return skinSettings;
+        return skinPropertiesSettings;
     }
 
     public static void saveSettings() {
@@ -44,7 +45,7 @@ public class SkinSettings {
         }
 
         try (FileWriter writer = new FileWriter(SKIN_SETTINGS_FILE)) {
-            GSON.toJson(skinSettings, writer);
+            GSON.toJson(skinPropertiesSettings, writer);
         } catch (IOException e) {
             Wardrobe.LOGGER.error("Could not save skin settings file", e);
         }
